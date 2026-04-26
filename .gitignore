@@ -1,0 +1,11 @@
+# Rojo
+*.rbxl
+*.rbxlx
+sourcemap.json
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/

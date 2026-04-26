@@ -1,0 +1,27 @@
+{
+  "name": "Sokoban",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "Sokoban": {
+        "$className": "Folder",
+        "SokobanCore": {
+          "$path": "src/ReplicatedStorage/Sokoban/SokobanCore.lua"
+        },
+        "Levels": {
+          "$path": "src/ReplicatedStorage/Sokoban/Levels.lua"
+        }
+      }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "SokobanClient": {
+          "$path": "src/StarterPlayer/StarterPlayerScripts/SokobanClient.client.lua"
+        }
+      }
+    }
+  }
+}
