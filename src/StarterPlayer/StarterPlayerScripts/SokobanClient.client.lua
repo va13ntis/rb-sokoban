@@ -17,6 +17,7 @@ local CELL = 4
 local WALL_HEIGHT = CELL * 1.2
 local BOX_HEIGHT = CELL * 0.85
 local PLAYER_Y_OFFSET = 2
+local FLOOR_HEIGHT = CELL * 2.1
 
 local COLORS = {
 	Wall = Color3.fromRGB(55, 55, 72),
@@ -26,6 +27,8 @@ local COLORS = {
 	BoxOnTarget = Color3.fromRGB(120, 180, 100),
 	StairUp = Color3.fromRGB(80, 125, 210),
 	StairDown = Color3.fromRGB(210, 125, 80),
+	LadderUp = Color3.fromRGB(70, 190, 180),
+	LadderDown = Color3.fromRGB(190, 95, 185),
 }
 
 local player = Players.LocalPlayer
@@ -93,7 +96,7 @@ hint.TextColor3 = Color3.fromRGB(160, 160, 175)
 hint.TextXAlignment = Enum.TextXAlignment.Left
 hint.TextYAlignment = Enum.TextYAlignment.Top
 hint.TextWrapped = true
-hint.Text = "WASD / arrows — move (use ^ / v stairs)   R — restart level   N — next level"
+hint.Text = "WASD / arrows — move (stairs ^/v, ladders H/h)   R — restart level   N — next level"
 hint.Parent = frame
 
 local winFrame = Instance.new("Frame")
@@ -119,13 +122,14 @@ winLabel.TextColor3 = Color3.fromRGB(220, 255, 230)
 winLabel.Text = "Level complete!"
 winLabel.Parent = winFrame
 
-local function gridToWorld(row: number, col: number, yLift: number): Vector3
-	local rows, cols = SokobanCore.dimensions(currentGrid)
+local function gridToWorld(row: number, col: number, floorIndex: number, yLift: number): Vector3
+	local rows, cols = SokobanCore.dimensions(currentFloors[1] or currentGrid)
 	local offsetX = -(cols - 1) * CELL / 2
 	local offsetZ = -(rows - 1) * CELL / 2
 	local x = offsetX + (col - 1) * CELL
 	local z = offsetZ + (row - 1) * CELL
-	return Vector3.new(x, yLift, z)
+	local floorY = (floorIndex - 1) * FLOOR_HEIGHT
+	return Vector3.new(x, floorY + yLift, z)
 end
 
 local function clearLevelVisuals()
@@ -136,74 +140,136 @@ local function clearLevelVisuals()
 	table.clear(boxParts)
 end
 
-local function buildStaticLevel(grid: Grid)
+local function baseFromCell(ch: string): string
+	if ch == "+" or ch == "*" then
+		return "."
+	elseif ch == "A" or ch == "{" then
+		return "^"
+	elseif ch == "V" or ch == "}" then
+		return "v"
+	elseif ch == "K" or ch == "[" then
+		return "H"
+	elseif ch == "k" or ch == "]" then
+		return "h"
+	end
+	return ch
+end
+
+local function isBoxCell(ch: string): boolean
+	return ch == "$" or ch == "*" or ch == "{" or ch == "}" or ch == "[" or ch == "]"
+end
+
+local function boxForBaseCell(ch: string): string?
+	if ch == " " then
+		return "$"
+	elseif ch == "." then
+		return "*"
+	elseif ch == "^" then
+		return "{"
+	elseif ch == "v" then
+		return "}"
+	elseif ch == "H" then
+		return "["
+	elseif ch == "h" then
+		return "]"
+	end
+	return nil
+end
+
+local function isOpenForBox(ch: string): boolean
+	return boxForBaseCell(ch) ~= nil
+end
+
+local function findConnector(grid: Grid, connector: string): (number?, number?)
+	for r = 1, #grid do
+		for c = 1, #grid[r] do
+			if baseFromCell(grid[r][c]) == connector then
+				return r, c
+			end
+		end
+	end
+	return nil, nil
+end
+
+local function buildStaticLevel()
 	clearLevelVisuals()
 	local folderInst = Instance.new("Folder")
 	folderInst.Name = "SokobanLevel"
 	folderInst.Parent = workspace
 	levelFolder = folderInst
 
-	local rows, cols = SokobanCore.dimensions(grid)
-	for r = 1, rows do
-		for c = 1, cols do
-			local ch = grid[r][c]
-			local pos = gridToWorld(r, c, 0)
-			local floor = Instance.new("Part")
-			floor.Name = "Floor"
-			floor.Anchored = true
-			floor.Size = Vector3.new(CELL - 0.15, 0.35, CELL - 0.15)
-			floor.Position = pos + Vector3.new(0, -0.2, 0)
-			floor.Color = COLORS.Floor
-			floor.Material = Enum.Material.Slate
-			floor.Parent = folderInst
+	for floorIndex, grid in currentFloors do
+		local rows, cols = SokobanCore.dimensions(grid)
+		for r = 1, rows do
+			for c = 1, cols do
+				local ch = baseFromCell(grid[r][c])
+				local pos = gridToWorld(r, c, floorIndex, 0)
+				local floor = Instance.new("Part")
+				floor.Name = "Floor"
+				floor.Anchored = true
+				floor.Size = Vector3.new(CELL - 0.15, 0.35, CELL - 0.15)
+				floor.Position = pos + Vector3.new(0, -0.2, 0)
+				floor.Color = COLORS.Floor
+				floor.Material = Enum.Material.Slate
+				floor.Parent = folderInst
 
-			if ch == "#" then
-				local wall = Instance.new("Part")
-				wall.Name = "Wall"
-				wall.Anchored = true
-				wall.Size = Vector3.new(CELL - 0.05, WALL_HEIGHT, CELL - 0.05)
-				wall.Position = pos + Vector3.new(0, WALL_HEIGHT / 2 - 0.1, 0)
-				wall.Color = COLORS.Wall
-				wall.Material = Enum.Material.Concrete
-				wall.Parent = folderInst
-			end
+				if ch == "#" then
+					local wall = Instance.new("Part")
+					wall.Name = "Wall"
+					wall.Anchored = true
+					wall.Size = Vector3.new(CELL - 0.05, WALL_HEIGHT, CELL - 0.05)
+					wall.Position = pos + Vector3.new(0, WALL_HEIGHT / 2 - 0.1, 0)
+					wall.Color = COLORS.Wall
+					wall.Material = Enum.Material.Concrete
+					wall.Parent = folderInst
+				end
 
-			if ch == "." or ch == "+" or ch == "*" then
-				local disc = Instance.new("Part")
-				disc.Name = "Target"
-				disc.Anchored = true
-				disc.CanCollide = false
-				disc.Size = Vector3.new(CELL * 0.55, 0.08, CELL * 0.55)
-				disc.Position = pos + Vector3.new(0, 0.12, 0)
-				disc.Color = COLORS.Target
-				disc.Material = Enum.Material.Neon
-				disc.Transparency = 0.45
-				disc.Parent = folderInst
-			end
+				if ch == "." then
+					local disc = Instance.new("Part")
+					disc.Name = "Target"
+					disc.Anchored = true
+					disc.CanCollide = false
+					disc.Size = Vector3.new(CELL * 0.55, 0.08, CELL * 0.55)
+					disc.Position = pos + Vector3.new(0, 0.12, 0)
+					disc.Color = COLORS.Target
+					disc.Material = Enum.Material.Neon
+					disc.Transparency = 0.45
+					disc.Parent = folderInst
+				end
 
-			if ch == "^" or ch == "A" or ch == "v" or ch == "V" then
-				local stair = Instance.new("Part")
-				stair.Name = "Stair"
-				stair.Anchored = true
-				stair.CanCollide = false
-				stair.Size = Vector3.new(CELL * 0.45, 0.1, CELL * 0.45)
-				stair.Position = pos + Vector3.new(0, 0.16, 0)
-				stair.Color = if ch == "^" or ch == "A" then COLORS.StairUp else COLORS.StairDown
-				stair.Material = Enum.Material.Neon
-				stair.Transparency = 0.15
-				stair.Parent = folderInst
+				if ch == "^" or ch == "v" or ch == "H" or ch == "h" then
+					local connector = Instance.new("Part")
+					connector.Name = if ch == "^" or ch == "v" then "Stair" else "Ladder"
+					connector.Anchored = true
+					connector.CanCollide = false
+					connector.Size = Vector3.new(CELL * 0.45, 0.1, CELL * 0.45)
+					connector.Position = pos + Vector3.new(0, 0.16, 0)
+					if ch == "^" then
+						connector.Color = COLORS.StairUp
+					elseif ch == "v" then
+						connector.Color = COLORS.StairDown
+					elseif ch == "H" then
+						connector.Color = COLORS.LadderUp
+					else
+						connector.Color = COLORS.LadderDown
+					end
+					connector.Material = Enum.Material.Neon
+					connector.Transparency = 0.15
+					connector.Parent = folderInst
+				end
 			end
 		end
 	end
 end
 
-local function ensureBoxes(grid: Grid)
+local function ensureBoxes()
 	local needed = 0
-	for r = 1, #grid do
-		for c = 1, #grid[r] do
-			local ch = grid[r][c]
-			if ch == "$" or ch == "*" then
-				needed += 1
+	for _, grid in currentFloors do
+		for r = 1, #grid do
+			for c = 1, #grid[r] do
+				if isBoxCell(grid[r][c]) then
+					needed += 1
+				end
 			end
 		end
 	end
@@ -225,15 +291,17 @@ local function ensureBoxes(grid: Grid)
 	end
 
 	local idx = 1
-	for r = 1, #grid do
-		for c = 1, #grid[r] do
-			local ch = grid[r][c]
-			if ch == "$" or ch == "*" then
-				local part = boxParts[idx]
-				idx += 1
-				local pos = gridToWorld(r, c, BOX_HEIGHT / 2)
-				part.Position = pos
-				part.Color = if ch == "*" then COLORS.BoxOnTarget else COLORS.Box
+	for floorIndex, grid in currentFloors do
+		for r = 1, #grid do
+			for c = 1, #grid[r] do
+				local ch = grid[r][c]
+				if isBoxCell(ch) then
+					local part = boxParts[idx]
+					idx += 1
+					local pos = gridToWorld(r, c, floorIndex, BOX_HEIGHT / 2)
+					part.Position = pos
+					part.Color = if ch == "*" then COLORS.BoxOnTarget else COLORS.Box
+				end
 			end
 		end
 	end
@@ -249,15 +317,16 @@ local function placeCharacter(grid: Grid)
 
 	local pr, pc = SokobanCore.findPlayer(grid)
 	if pr and pc then
-		local pos = gridToWorld(pr, pc, PLAYER_Y_OFFSET)
+		local pos = gridToWorld(pr, pc, currentFloorIndex, PLAYER_Y_OFFSET)
 		hrp.CFrame = CFrame.new(pos) * CFrame.Angles(0, currentFacingYaw, 0)
 	end
 end
 
 local function pointCameraAtLevel()
-	local rows, cols = SokobanCore.dimensions(currentGrid)
-	local center = gridToWorld((rows + 1) / 2, (cols + 1) / 2, 0)
-	local camPos = center + Vector3.new(0, math.max(rows, cols) * CELL * 0.85, math.max(rows, cols) * CELL * 0.75)
+	local rows, cols = SokobanCore.dimensions(currentFloors[1] or currentGrid)
+	local center = gridToWorld((rows + 1) / 2, (cols + 1) / 2, math.max(1, math.ceil(#currentFloors / 2)), 0)
+	local camPos = center
+		+ Vector3.new(0, math.max(rows, cols) * CELL * 0.85 + (#currentFloors - 1) * FLOOR_HEIGHT * 0.5, math.max(rows, cols) * CELL * 0.8)
 	camera.CameraType = Enum.CameraType.Scriptable
 	camera.CFrame = CFrame.lookAt(camPos, center + Vector3.new(0, 1, 0))
 	camera.FieldOfView = 55
@@ -277,7 +346,7 @@ local function updateHUD()
 end
 
 local function isOpenForPlayer(ch: string): boolean
-	return ch == " " or ch == "." or ch == "^" or ch == "v"
+	return ch == " " or ch == "." or ch == "^" or ch == "v" or ch == "H" or ch == "h"
 end
 
 local function leavePlayerCell(grid: Grid, row: number, col: number)
@@ -290,6 +359,10 @@ local function leavePlayerCell(grid: Grid, row: number, col: number)
 		grid[row][col] = "^"
 	elseif ch == "V" then
 		grid[row][col] = "v"
+	elseif ch == "K" then
+		grid[row][col] = "H"
+	elseif ch == "k" then
+		grid[row][col] = "h"
 	end
 end
 
@@ -301,20 +374,50 @@ local function setPlayerCell(grid: Grid, row: number, col: number)
 		grid[row][col] = "A"
 	elseif base == "v" then
 		grid[row][col] = "V"
+	elseif base == "H" then
+		grid[row][col] = "K"
+	elseif base == "h" then
+		grid[row][col] = "k"
 	else
 		grid[row][col] = "@"
 	end
 end
 
-local function findStair(grid: Grid, stairTile: string): (number?, number?)
-	for r = 1, #grid do
-		for c = 1, #grid[r] do
-			if grid[r][c] == stairTile then
-				return r, c
+local function settleFallingBoxes()
+	local moved = true
+	while moved do
+		moved = false
+		for floorIndex = 2, #currentFloors do
+			local upper = currentFloors[floorIndex]
+			local lower = currentFloors[floorIndex - 1]
+			for r = 1, #upper do
+				for c = 1, #upper[r] do
+					local ch = upper[r][c]
+					local isDropPoint = ch == "}" or ch == "]"
+					if isDropPoint then
+						local tr, tc = r, c
+						local landing = lower[tr] and lower[tr][tc] or nil
+						if not landing or not isOpenForBox(landing) then
+							local connector = if ch == "}" then "^" else "H"
+							local sr, sc = findConnector(lower, connector)
+							if sr and sc then
+								tr, tc = sr, sc
+								landing = lower[tr][tc]
+							end
+						end
+						if landing and isOpenForBox(landing) then
+							upper[r][c] = if ch == "}" then "v" else "h"
+							local dropped = boxForBaseCell(landing)
+							if dropped then
+								lower[tr][tc] = dropped
+								moved = true
+							end
+						end
+					end
+				end
 			end
 		end
 	end
-	return nil, nil
 end
 
 local function transitionFloorIfOnStairs()
@@ -324,13 +427,19 @@ local function transitionFloorIfOnStairs()
 	end
 	local ch = currentGrid[pr][pc]
 	local targetFloor = currentFloorIndex
-	local targetStair = ""
+	local targetConnector = ""
 	if ch == "A" and currentFloorIndex < #currentFloors then
 		targetFloor = currentFloorIndex + 1
-		targetStair = "v"
+		targetConnector = "v"
 	elseif ch == "V" and currentFloorIndex > 1 then
 		targetFloor = currentFloorIndex - 1
-		targetStair = "^"
+		targetConnector = "^"
+	elseif ch == "K" and currentFloorIndex < #currentFloors then
+		targetFloor = currentFloorIndex + 1
+		targetConnector = "h"
+	elseif ch == "k" and currentFloorIndex > 1 then
+		targetFloor = currentFloorIndex - 1
+		targetConnector = "H"
 	else
 		return
 	end
@@ -340,7 +449,7 @@ local function transitionFloorIfOnStairs()
 	local tr, tc = pr, pc
 	local inBounds = tr >= 1 and tr <= #toGrid and tc >= 1 and tc <= #toGrid[tr]
 	if not inBounds or not isOpenForPlayer(toGrid[tr][tc]) then
-		local sr, sc = findStair(toGrid, targetStair)
+		local sr, sc = findConnector(toGrid, targetConnector)
 		if not sr or not sc then
 			return
 		end
@@ -351,7 +460,6 @@ local function transitionFloorIfOnStairs()
 	setPlayerCell(toGrid, tr, tc)
 	currentFloorIndex = targetFloor
 	currentGrid = toGrid
-	buildStaticLevel(currentGrid)
 end
 
 local function isLevelWin(): boolean
@@ -378,8 +486,8 @@ local function loadLevel(index: number)
 	currentGrid = currentFloors[currentFloorIndex]
 	moveCount = 0
 	currentFacingYaw = math.rad(90)
-	buildStaticLevel(currentGrid)
-	ensureBoxes(currentGrid)
+	buildStaticLevel()
+	ensureBoxes()
 	placeCharacter(currentGrid)
 	pointCameraAtLevel()
 	updateHUD()
@@ -402,10 +510,12 @@ local function tryStep(dRow: number, dCol: number)
 	end
 	currentGrid = nextGrid
 	currentFloors[currentFloorIndex] = currentGrid
+	settleFallingBoxes()
 	transitionFloorIfOnStairs()
 	currentFloors[currentFloorIndex] = currentGrid
 	moveCount += 1
-	ensureBoxes(currentGrid)
+	buildStaticLevel()
+	ensureBoxes()
 	placeCharacter(currentGrid)
 	updateHUD()
 

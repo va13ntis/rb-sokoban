@@ -5,7 +5,7 @@ A classic [Sokoban](https://en.wikipedia.org/wiki/Sokoban) puzzle for Roblox: pu
 ## Features
 
 - **Faithful rules** — Walls block movement, crates only move when pushed, and you can only push one crate at a time. Win when every target has a crate.
-- **9 levels including multi-floor puzzles** — Added extra single-floor and stair-connected multi-floor layouts.
+- **9 levels including multi-floor puzzles** — Includes stacked 3D floors with stairs, ladders, and box drops to lower levels.
 - **3D view** — Orthographic-style camera on the board, with walls, floor tiles, target markers, wooden crates, and your avatar on the grid.
 - **HUD** — Level name, progress (level index and total), move count, and control hints.
 - **Strict Luau** — `SokobanCore` and the client use `--!strict` for clearer typing and fewer runtime surprises.
@@ -32,6 +32,8 @@ A classic [Sokoban](https://en.wikipedia.org/wiki/Sokoban) puzzle for Roblox: pu
 | `*` | Crate on target |
 | `^` | Stair up (to next floor) |
 | `v` | Stair down (to previous floor) |
+| `H` | Ladder up (to next floor) |
+| `h` | Ladder down (to previous floor) |
 
 ## Controls
 

@@ -97,34 +97,34 @@ local Levels: { Level } = {
 		},
 	},
 	{
-		name = "Lift puzzle",
+		name = "Ladder transfer",
 		floors = {
 			[[
 #########
-#@  ^   #
+#@  H   #
 # $$ .  #
 #########
 ]],
 			[[
 #########
-# . v . #
+# . h . #
 #   $   #
 #########
 ]],
 		},
 	},
 	{
-		name = "Three floor relay",
+		name = "Three floor drop",
 		floors = {
 			[[
 #########
-#@ ^    #
+#@ ^ H  #
 # $ .   #
 #########
 ]],
 			[[
 #########
-# v ^   #
+# v h   #
 #   $ . #
 #########
 ]],

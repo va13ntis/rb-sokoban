@@ -63,7 +63,7 @@ function SokobanCore.isWin(grid: Grid): boolean
 		local row = grid[r]
 		for c = 1, #row do
 			local ch = row[c]
-			if ch == "." or ch == "+" or ch == "$" then
+			if ch == "." or ch == "+" or ch == "$" or ch == "{" or ch == "}" or ch == "[" or ch == "]" then
 				return false
 			end
 		end
@@ -72,7 +72,39 @@ function SokobanCore.isWin(grid: Grid): boolean
 end
 
 local function isBox(ch: string): boolean
-	return ch == "$" or ch == "*"
+	return ch == "$" or ch == "*" or ch == "{" or ch == "}" or ch == "[" or ch == "]"
+end
+
+local function baseFromBoxCell(ch: string): string
+	if ch == "*" then
+		return "."
+	elseif ch == "{" then
+		return "^"
+	elseif ch == "}" then
+		return "v"
+	elseif ch == "[" then
+		return "H"
+	elseif ch == "]" then
+		return "h"
+	end
+	return " "
+end
+
+local function boxForBaseCell(ch: string): string?
+	if ch == " " then
+		return "$"
+	elseif ch == "." then
+		return "*"
+	elseif ch == "^" then
+		return "{"
+	elseif ch == "v" then
+		return "}"
+	elseif ch == "H" then
+		return "["
+	elseif ch == "h" then
+		return "]"
+	end
+	return nil
 end
 
 function SokobanCore.tryMove(grid: Grid, deltaRow: number, deltaCol: number): Grid?
@@ -108,6 +140,10 @@ function SokobanCore.tryMove(grid: Grid, deltaRow: number, deltaCol: number): Gr
 			prow[pc] = "^"
 		elseif prow[pc] == "V" then
 			prow[pc] = "v"
+		elseif prow[pc] == "K" then
+			prow[pc] = "H"
+		elseif prow[pc] == "k" then
+			prow[pc] = "h"
 		end
 	end
 
@@ -121,6 +157,10 @@ function SokobanCore.tryMove(grid: Grid, deltaRow: number, deltaCol: number): Gr
 			nrow[nc] = "A"
 		elseif dest == "v" then
 			nrow[nc] = "V"
+		elseif dest == "H" then
+			nrow[nc] = "K"
+		elseif dest == "h" then
+			nrow[nc] = "k"
 		end
 		return nextGrid
 	end
@@ -140,16 +180,30 @@ function SokobanCore.tryMove(grid: Grid, deltaRow: number, deltaCol: number): Gr
 
 	playerLeavesCell()
 
-	if dest == "$" then
-		nrow[nc] = "@"
+	if dest == "$" or dest == "{" or dest == "}" or dest == "[" or dest == "]" then
+		local base = baseFromBoxCell(dest)
+		if base == "." then
+			nrow[nc] = "+"
+		elseif base == "^" then
+			nrow[nc] = "A"
+		elseif base == "v" then
+			nrow[nc] = "V"
+		elseif base == "H" then
+			nrow[nc] = "K"
+		elseif base == "h" then
+			nrow[nc] = "k"
+		else
+			nrow[nc] = "@"
+		end
 	elseif dest == "*" then
 		nrow[nc] = "+"
 	end
 
-	if beyond == " " then
-		brow[bc] = "$"
-	elseif beyond == "." then
-		brow[bc] = "*"
+	local boxDest = boxForBaseCell(beyond)
+	if boxDest then
+		brow[bc] = boxDest
+	else
+		return nil
 	end
 
 	return nextGrid
