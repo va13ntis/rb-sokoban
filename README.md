@@ -5,7 +5,7 @@ A classic [Sokoban](https://en.wikipedia.org/wiki/Sokoban) puzzle for Roblox: pu
 ## Features
 
 - **Faithful rules** — Walls block movement, crates only move when pushed, and you can only push one crate at a time. Win when every target has a crate.
-- **4 Microban-style levels** — Small layouts suitable for a demo: Tutorial, Corners, Hallway, and Four rooms.
+- **9 levels including multi-floor puzzles** — Added extra single-floor and stair-connected multi-floor layouts.
 - **3D view** — Orthographic-style camera on the board, with walls, floor tiles, target markers, wooden crates, and your avatar on the grid.
 - **HUD** — Level name, progress (level index and total), move count, and control hints.
 - **Strict Luau** — `SokobanCore` and the client use `--!strict` for clearer typing and fewer runtime surprises.
@@ -30,6 +30,8 @@ A classic [Sokoban](https://en.wikipedia.org/wiki/Sokoban) puzzle for Roblox: pu
 | `+` | Player on target |
 | `$` | Crate |
 | `*` | Crate on target |
+| `^` | Stair up (to next floor) |
+| `v` | Stair down (to previous floor) |
 
 ## Controls
 
@@ -42,7 +44,7 @@ A classic [Sokoban](https://en.wikipedia.org/wiki/Sokoban) puzzle for Roblox: pu
 | **R** | Restart current level |
 | **N** | Go to next level (wraps from last to first) |
 
-After you clear a level, a short “Level complete!” banner appears; if there is another level, the game loads it automatically after a brief delay.
+After you clear a level (all floors for multi-floor stages), a short “Level complete!” banner appears; if there is another level, the game loads it automatically after a brief delay.
 
 ## Requirements
 

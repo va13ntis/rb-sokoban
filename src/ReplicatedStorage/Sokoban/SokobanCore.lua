@@ -104,6 +104,10 @@ function SokobanCore.tryMove(grid: Grid, deltaRow: number, deltaCol: number): Gr
 			prow[pc] = " "
 		elseif prow[pc] == "+" then
 			prow[pc] = "."
+		elseif prow[pc] == "A" then
+			prow[pc] = "^"
+		elseif prow[pc] == "V" then
+			prow[pc] = "v"
 		end
 	end
 
@@ -113,6 +117,10 @@ function SokobanCore.tryMove(grid: Grid, deltaRow: number, deltaCol: number): Gr
 			nrow[nc] = "@"
 		elseif dest == "." then
 			nrow[nc] = "+"
+		elseif dest == "^" then
+			nrow[nc] = "A"
+		elseif dest == "v" then
+			nrow[nc] = "V"
 		end
 		return nextGrid
 	end

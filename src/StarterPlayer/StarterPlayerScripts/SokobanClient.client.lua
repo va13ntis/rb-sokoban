@@ -24,6 +24,8 @@ local COLORS = {
 	Target = Color3.fromRGB(90, 140, 90),
 	Box = Color3.fromRGB(180, 120, 70),
 	BoxOnTarget = Color3.fromRGB(120, 180, 100),
+	StairUp = Color3.fromRGB(80, 125, 210),
+	StairDown = Color3.fromRGB(210, 125, 80),
 }
 
 local player = Players.LocalPlayer
@@ -31,9 +33,12 @@ local camera = workspace.CurrentCamera
 
 local levelFolder: Folder? = nil
 local boxParts: { BasePart } = {}
+local currentFloors: { Grid } = {}
 local currentGrid: Grid = {}
 local levelIndex = 1
 local moveCount = 0
+local currentFacingYaw = math.rad(90)
+local currentFloorIndex = 1
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "SokobanUI"
@@ -88,7 +93,7 @@ hint.TextColor3 = Color3.fromRGB(160, 160, 175)
 hint.TextXAlignment = Enum.TextXAlignment.Left
 hint.TextYAlignment = Enum.TextYAlignment.Top
 hint.TextWrapped = true
-hint.Text = "WASD / arrows — move   R — restart level   N — next level"
+hint.Text = "WASD / arrows — move (use ^ / v stairs)   R — restart level   N — next level"
 hint.Parent = frame
 
 local winFrame = Instance.new("Frame")
@@ -175,6 +180,19 @@ local function buildStaticLevel(grid: Grid)
 				disc.Transparency = 0.45
 				disc.Parent = folderInst
 			end
+
+			if ch == "^" or ch == "A" or ch == "v" or ch == "V" then
+				local stair = Instance.new("Part")
+				stair.Name = "Stair"
+				stair.Anchored = true
+				stair.CanCollide = false
+				stair.Size = Vector3.new(CELL * 0.45, 0.1, CELL * 0.45)
+				stair.Position = pos + Vector3.new(0, 0.16, 0)
+				stair.Color = if ch == "^" or ch == "A" then COLORS.StairUp else COLORS.StairDown
+				stair.Material = Enum.Material.Neon
+				stair.Transparency = 0.15
+				stair.Parent = folderInst
+			end
 		end
 	end
 end
@@ -232,7 +250,7 @@ local function placeCharacter(grid: Grid)
 	local pr, pc = SokobanCore.findPlayer(grid)
 	if pr and pc then
 		local pos = gridToWorld(pr, pc, PLAYER_Y_OFFSET)
-		hrp.CFrame = CFrame.new(pos) * CFrame.Angles(0, math.rad(90), 0)
+		hrp.CFrame = CFrame.new(pos) * CFrame.Angles(0, currentFacingYaw, 0)
 	end
 end
 
@@ -248,14 +266,118 @@ end
 local function updateHUD()
 	local L = Levels[levelIndex]
 	title.Text = L.name
-	subtitle.Text = string.format("Level %d / %d  ·  Moves: %d", levelIndex, #Levels, moveCount)
+	subtitle.Text = string.format(
+		"Level %d / %d  ·  Floor %d / %d  ·  Moves: %d",
+		levelIndex,
+		#Levels,
+		currentFloorIndex,
+		#currentFloors,
+		moveCount
+	)
+end
+
+local function isOpenForPlayer(ch: string): boolean
+	return ch == " " or ch == "." or ch == "^" or ch == "v"
+end
+
+local function leavePlayerCell(grid: Grid, row: number, col: number)
+	local ch = grid[row][col]
+	if ch == "@" then
+		grid[row][col] = " "
+	elseif ch == "+" then
+		grid[row][col] = "."
+	elseif ch == "A" then
+		grid[row][col] = "^"
+	elseif ch == "V" then
+		grid[row][col] = "v"
+	end
+end
+
+local function setPlayerCell(grid: Grid, row: number, col: number)
+	local base = grid[row][col]
+	if base == "." then
+		grid[row][col] = "+"
+	elseif base == "^" then
+		grid[row][col] = "A"
+	elseif base == "v" then
+		grid[row][col] = "V"
+	else
+		grid[row][col] = "@"
+	end
+end
+
+local function findStair(grid: Grid, stairTile: string): (number?, number?)
+	for r = 1, #grid do
+		for c = 1, #grid[r] do
+			if grid[r][c] == stairTile then
+				return r, c
+			end
+		end
+	end
+	return nil, nil
+end
+
+local function transitionFloorIfOnStairs()
+	local pr, pc = SokobanCore.findPlayer(currentGrid)
+	if not pr or not pc then
+		return
+	end
+	local ch = currentGrid[pr][pc]
+	local targetFloor = currentFloorIndex
+	local targetStair = ""
+	if ch == "A" and currentFloorIndex < #currentFloors then
+		targetFloor = currentFloorIndex + 1
+		targetStair = "v"
+	elseif ch == "V" and currentFloorIndex > 1 then
+		targetFloor = currentFloorIndex - 1
+		targetStair = "^"
+	else
+		return
+	end
+
+	local fromGrid = currentGrid
+	local toGrid = currentFloors[targetFloor]
+	local tr, tc = pr, pc
+	local inBounds = tr >= 1 and tr <= #toGrid and tc >= 1 and tc <= #toGrid[tr]
+	if not inBounds or not isOpenForPlayer(toGrid[tr][tc]) then
+		local sr, sc = findStair(toGrid, targetStair)
+		if not sr or not sc then
+			return
+		end
+		tr, tc = sr, sc
+	end
+
+	leavePlayerCell(fromGrid, pr, pc)
+	setPlayerCell(toGrid, tr, tc)
+	currentFloorIndex = targetFloor
+	currentGrid = toGrid
+	buildStaticLevel(currentGrid)
+end
+
+local function isLevelWin(): boolean
+	for _, floorGrid in currentFloors do
+		if not SokobanCore.isWin(floorGrid) then
+			return false
+		end
+	end
+	return true
 end
 
 local function loadLevel(index: number)
 	levelIndex = math.clamp(index, 1, #Levels)
 	local L = Levels[levelIndex]
-	currentGrid = SokobanCore.parse(L.map)
+	currentFloors = {}
+	if L.floors and #L.floors > 0 then
+		for _, floorMap in L.floors do
+			table.insert(currentFloors, SokobanCore.parse(floorMap))
+		end
+	elseif L.map then
+		table.insert(currentFloors, SokobanCore.parse(L.map))
+	end
+	currentFloorIndex = 1
+	currentGrid = currentFloors[currentFloorIndex]
 	moveCount = 0
+	currentFacingYaw = math.rad(90)
 	buildStaticLevel(currentGrid)
 	ensureBoxes(currentGrid)
 	placeCharacter(currentGrid)
@@ -269,16 +391,28 @@ local function tryStep(dRow: number, dCol: number)
 	if not nextGrid then
 		return
 	end
+	if dCol == 1 then
+		currentFacingYaw = math.rad(90)
+	elseif dCol == -1 then
+		currentFacingYaw = math.rad(-90)
+	elseif dRow == 1 then
+		currentFacingYaw = math.rad(180)
+	elseif dRow == -1 then
+		currentFacingYaw = 0
+	end
 	currentGrid = nextGrid
+	currentFloors[currentFloorIndex] = currentGrid
+	transitionFloorIfOnStairs()
+	currentFloors[currentFloorIndex] = currentGrid
 	moveCount += 1
 	ensureBoxes(currentGrid)
 	placeCharacter(currentGrid)
 	updateHUD()
 
-	if SokobanCore.isWin(currentGrid) then
+	if isLevelWin() then
 		winFrame.Visible = true
 		task.delay(1.2, function()
-			if SokobanCore.isWin(currentGrid) and levelIndex < #Levels then
+			if isLevelWin() and levelIndex < #Levels then
 				loadLevel(levelIndex + 1)
 			end
 		end)
@@ -316,7 +450,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		dc = -1
 	elseif
 		input.KeyCode == Enum.KeyCode.D
-		or input.KeyCode == Enum.Right
+		or input.KeyCode == Enum.KeyCode.Right
 	then
 		dc = 1
 	end
